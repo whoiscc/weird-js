@@ -58,10 +58,19 @@ class ObjectProxy {
 class ObjectRef {
     constructor(proxy) {
         this._proxy = proxy;
+        this._captured = false;
     }
 
     capture(handler) {
-        this._proxy._capture_ref(handler);
+        if (this._captured) {
+            throw new Error('Cannot capture');
+        }
+        this._captured = true;
+        try {
+            this._proxy._capture_ref(handler);
+        } finally {
+            this._captured = false;
+        }
     }
 }
 
@@ -71,7 +80,15 @@ class ObjectMut {
     }
 
     capture(handler) {
-        this._proxy._capture_mut(handler);
+        if (this._captured) {
+            throw new Error('Cannot capture');
+        }
+        this._captured = true;
+        try {
+            this._proxy._capture_mut(handler);
+        } finally {
+            this._captured = false;
+        }
     }
 }
 
@@ -96,3 +113,50 @@ try {
 } catch (err) {
     console.log(err);
 }
+
+class SafeVector {
+    constructor() {
+        this._vec = new ObjectProxy([]);
+    }
+
+    push_back(element) {
+        this._vec.with_mut(mut_vec => {
+            mut_vec.capture(raw_vec => {
+                raw_vec.push(element.move());
+                return raw_vec;
+            });
+        });
+    }
+
+    at(index) {
+        return resolve => {
+            this._vec.with_ref(ref_vec => {
+                index.with_ref(ref_index => {
+                    ref_vec.capture(raw_vec => {
+                        ref_index.capture(raw_index => {
+                            raw_vec[raw_index].with_ref(resolve);
+                        });
+                    });    
+                });
+            });    
+        }
+    }
+}
+
+const vector = new SafeVector();
+vector.push_back((new ObjectProxy('hello')).move());
+vector.push_back((new ObjectProxy('world')).move());
+vector.at(new ObjectProxy(0))(ref_element => {
+    ref_element.capture(raw_element => {
+        console.log(raw_element);
+    });
+});
+vector.push_back((new ObjectProxy('again')).move());
+vector.at(new ObjectProxy(2))(ref_element => {
+    try {
+        vector.push_back((new ObjectProxy('error')).move());
+        console.log('ok');
+    } catch (err) {
+        console.log(err);
+    }
+});
