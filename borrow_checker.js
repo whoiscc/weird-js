@@ -128,31 +128,29 @@ class SafeVector {
         });
     }
 
-    at(index) {
-        return resolve => {
-            this._vec.with_ref(ref_vec => {
-                index.with_ref(ref_index => {
-                    ref_vec.capture(raw_vec => {
-                        ref_index.capture(raw_index => {
-                            raw_vec[raw_index].with_ref(resolve);
-                        });
-                    });    
-                });
-            });    
-        }
+    at(index, resolve) {
+        this._vec.with_ref(ref_vec => {
+            index.with_ref(ref_index => {
+                ref_vec.capture(raw_vec => {
+                    ref_index.capture(raw_index => {
+                        raw_vec[raw_index].with_ref(resolve);
+                    });
+                });    
+            });
+        });    
     }
 }
 
 const vector = new SafeVector();
 vector.push_back((new ObjectProxy('hello')).move());
 vector.push_back((new ObjectProxy('world')).move());
-vector.at(new ObjectProxy(0))(ref_element => {
+vector.at(new ObjectProxy(0), ref_element => {
     ref_element.capture(raw_element => {
         console.log(raw_element);
     });
 });
 vector.push_back((new ObjectProxy('again')).move());
-vector.at(new ObjectProxy(2))(ref_element => {
+vector.at(new ObjectProxy(2), ref_element => {
     try {
         vector.push_back((new ObjectProxy('error')).move());
         console.log('ok');
